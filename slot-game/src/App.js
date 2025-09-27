@@ -1,5 +1,7 @@
 import React, { useRef, useState } from "react";
 import GameCanvas from "./GameCanvas";
+import { sound } from "@pixi/sound";
+
 
 // Simple payout table for the demo:
 // - any horizontal row match = +30 credits
@@ -10,10 +12,14 @@ const PAYOUTS = {
   diag: 50,
 };
 
+
+
 export default function App() {
   const gameRef = useRef(null);       // ref to call methods exposed by GameCanvas
   const [credits, setCredits] = useState(100);
   const [spinning, setSpinning] = useState(false);
+  const [winMessages, setWinMessages] = useState([]);
+
 
   const handleSpin = () => {
     // Prevent spam clicks + ensure player can afford the bet.
@@ -34,81 +40,170 @@ export default function App() {
     gameRef.current?.spinReels();
   };
 
-  const handleSpinEnd = () => {
-    // Called by GameCanvas AFTER the last reel has finished spinning.
-    // 1) Read the visible 3x3 grid of symbols from Pixi
-    const result = gameRef.current?.getResult(); // [["cherry","lemon","bar"],["..."],["..."]]
-    if (!result) {
-      setSpinning(false);
-      return;
-    }
-
-    let totalWin = 0;
-    const winningLines = []; // we push descriptors like { type:"row", row:0 } or { type:"diag1" }
-
-    // 2) Check horizontal paylines (top, middle, bottom)
-    for (let row = 0; row < 3; row++) {
-      const a = result[row][0];
-      const b = result[row][1];
-      const c = result[row][2];
-      if (a === b && b === c) {
-        totalWin += PAYOUTS.row;
-        winningLines.push({ type: "row", row });
-      }
-    }
-
-    // 3) Check diagonals
-    // ↘ diagonal (top-left to bottom-right)
-    if (result[0][0] === result[1][1] && result[1][1] === result[2][2]) {
-      totalWin += PAYOUTS.diag;
-      winningLines.push({ type: "diag1" });
-    }
-    // ↙ diagonal (top-right to bottom-left)
-    if (result[0][2] === result[1][1] && result[1][1] === result[2][0]) {
-      totalWin += PAYOUTS.diag;
-      winningLines.push({ type: "diag2" });
-    }
-
-    // 4) If there are wins, add credits and highlight lines inside Pixi
-    if (totalWin > 0) {
-      setCredits((c) => c + totalWin);
-      gameRef.current?.highlightPaylines(winningLines);
-      // Pixi will also play the "win" sound (see GameCanvas)
-      alert(`🎉 You win ${totalWin} credits!`);
-    } else {
-      // No win → ensure highlights are cleared
-      gameRef.current?.highlightPaylines([]);
-    }
-
-    // 5) Re-enable the Spin button
+const handleSpinEnd = () => {
+  const result = gameRef.current?.getResult();
+  if (!result) {
     setSpinning(false);
-  };
+    return;
+  }
+
+  let totalWin = 0;
+  const winningLines = [];
+  const messages = [];
+
+  // Rows
+  for (let row = 0; row < 3; row++) {
+    const [a, b, c] = result[row];
+    if (a === b && b === c) {
+      totalWin += PAYOUTS.row;
+      winningLines.push({ type: "row", row });
+      messages.push(`Row ${row + 1} win with ${a}, ${b}, ${c}`);
+    }
+  }
+
+  // Diagonal ↘
+  if (result[0][0] === result[1][1] && result[1][1] === result[2][2]) {
+    totalWin += PAYOUTS.diag;
+    winningLines.push({ type: "diag1" });
+    messages.push(`Diagonal (↘) win with ${result[0][0]}, ${result[1][1]}, ${result[2][2]}`);
+  }
+
+  // Diagonal ↙
+  if (result[0][2] === result[1][1] && result[1][1] === result[2][0]) {
+    totalWin += PAYOUTS.diag;
+    winningLines.push({ type: "diag2" });
+    messages.push(`Diagonal (↙) win with ${result[0][2]}, ${result[1][1]}, ${result[2][0]}`);
+  }
+
+  // Jackpot
+  if (
+    result[1][0] === "seven" &&
+    result[1][1] === "seven" &&
+    result[1][2] === "seven"
+  ) {
+    totalWin += PAYOUTS.jackpot;
+    messages.push("🎰 JACKPOT! 7-7-7 on the middle row");
+  }
+
+  // Handle wins
+  if (totalWin > 0) {
+    setCredits((c) => c + totalWin);
+    gameRef.current?.highlightPaylines(winningLines);
+    sound.play("win");
+    setWinMessages([`🎉 You win ${totalWin} credits!`, ...messages]);
+  } else {
+    gameRef.current?.highlightPaylines([]);
+    sound.play("lose");
+    setWinMessages(["No win this time. Try again!"]);
+  }
+
+  setSpinning(false);
+};
+
+
 
   return (
     <div style={{ textAlign: "center", height: "100%" }}>
-      <h1 style={{ marginTop: 16 }}>🎰 React + Pixi Slot</h1>
-      <p style={{ margin: 0 }}>Credits: <b>{credits}</b></p>
-      <p style={{ marginTop: 8, opacity: 0.7 }}>Bet per spin: 10</p>
+      <h1 style={{ marginTop: 20 }}>🎰 React + Pixi - Mini Slot Machine Game</h1>
+      
+     <div style={{
+            display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          maxWidth: "600px",
+          margin: "0 auto 20px auto",
+           borderRadius: "10px",
+            backgroundColor: "#1a1a1a",
+            border: "2px solid #0af",
+            padding: "15px",
+          }}
+        >
+            <p style={{ margin: 8,fontSize: 18 }}>Credits: <b>{credits}</b></p>
+            <p style={{ margin: 8, opacity: 0.7,fontSize: 18 }}>Bet per spin: 10</p>     
 
-      <button
-        onClick={handleSpin}
-        disabled={spinning}
+            <button
+              onClick={handleSpin}
+              disabled={spinning}
+              style={{
+                padding: "10px 24px",
+                fontSize: 18,
+                borderRadius: 8,
+                border: "1px solid #444",
+                background: spinning ? "#333" : "#1f6feb",
+                color: "white",
+              }}
+            >
+              {spinning ? "Spinning..." : "Spin"}
+            </button>
+
+        </div>
+      
+
+ {/* ✅ Instructions panel */}
+      <div
         style={{
-          padding: "10px 24px",
-          fontSize: 18,
-          borderRadius: 8,
-          border: "1px solid #444",
-          background: spinning ? "#333" : "#1f6feb",
+          flex: 1,
+          marginTop: "20px",
+          padding: "15px",
+          border: "2px solid gold",
+          borderRadius: "10px",
           color: "white",
+          backgroundColor: "#222",
+          maxWidth: "600px",
+          marginLeft: "auto",
+          marginRight: "auto",
+          textAlign: "left",
+          fontFamily: "Arial",
         }}
       >
-        {spinning ? "Spinning..." : "Spin"}
-      </button>
+        <h3 style={{ color: "gold", textAlign: "center" }}>How It Works</h3>
+        <ul>
+          <li>Each spin costs <strong>10 credits</strong></li>
+          <li>3 matching symbols on a row → <strong>+30 credits</strong></li>
+          <li>3 matching symbols diagonally → <strong>+50 credits</strong></li>
+          <li>
+            Jackpot: <span style={{ color: "red" }}>7-7-7</span> →{" "}
+            <strong>+100 credits</strong>
+          </li>
+        </ul>
+      </div>
+
+      {/* Win messages panel */}
+<div
+  style={{
+    marginTop: "20px",
+    padding: "15px",
+    border: "2px solid #888",
+    borderRadius: "10px",
+    backgroundColor: "#111",
+    maxWidth: "600px",
+    marginLeft: "auto",
+    marginRight: "auto",
+    color: "white",
+    textAlign: "center",
+    fontFamily: "Arial"
+  }}
+>
+  {winMessages.map((msg, i) => (
+    <p key={i} style={{ margin: "5px 0", color: msg.includes("🎉") ? "gold" : "white" }}>
+      {msg}
+    </p>
+  ))}
+</div>
+
 
       {/* Game canvas below. We pass a callback for when spinning finishes. */}
       <div style={{ display: "flex", justifyContent: "center", marginTop: 16 }}>
-        <GameCanvas ref={gameRef} onSpinEnd={handleSpinEnd} />
+        <GameCanvas ref={gameRef} onSpinEnd={handleSpinEnd} />       
+
+
       </div>
+
+      
+      
+
     </div>
+
+    
   );
 }
