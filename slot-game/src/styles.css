@@ -1,0 +1,13 @@
+/* Just to make the demo look a bit nicer */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+body {
+  background: #0f0f13;
+  color: #ffffff;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+button {
+  cursor: pointer;
+}
