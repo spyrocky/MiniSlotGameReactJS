@@ -5,7 +5,7 @@ import React, {
   useImperativeHandle,
 } from "react";
 import * as PIXI from "pixi.js";
-import gsap from "gsap";
+
 import { GlowFilter } from "@pixi/filter-glow";
 import { sound } from "@pixi/sound";
 
@@ -52,7 +52,7 @@ const GameCanvas = forwardRef(({ onSpinEnd }, ref) => {
   const appRef = useRef(null);
   const reelsRef = useRef([]);
   const highlightLayerRef = useRef(null);
-  const spinInstanceRef = useRef(null); // to track the spin sound instance
+  
 
   useImperativeHandle(ref, () => ({
     spinReels,
