@@ -51,41 +51,55 @@ const handleSpinEnd = () => {
   const winningLines = [];
   const messages = [];
 
-  // Rows
+  // 🔹 Check horizontal rows
   for (let row = 0; row < 3; row++) {
     const [a, b, c] = result[row];
+
     if (a === b && b === c) {
-      totalWin += PAYOUTS.row;
-      winningLines.push({ type: "row", row });
-      messages.push(`Row ${row + 1} win with ${a}, ${b}, ${c}`);
+      // Jackpot override → 7-7-7 pays 100 instead of 30
+      if (a === "seven") {
+        totalWin += PAYOUTS.jackpot;
+        winningLines.push({ type: "row", row });
+        messages.push(`🎰 JACKPOT! Row ${row + 1} with 7-7-7`);
+      } else {
+        totalWin += PAYOUTS.row;
+        winningLines.push({ type: "row", row });
+        messages.push(`Row ${row + 1} win with ${a}, ${b}, ${c}`);
+      }
     }
   }
 
-  // Diagonal ↘
+  // 🔹 Check diagonal ↘
   if (result[0][0] === result[1][1] && result[1][1] === result[2][2]) {
-    totalWin += PAYOUTS.diag;
-    winningLines.push({ type: "diag1" });
-    messages.push(`Diagonal (↘) win with ${result[0][0]}, ${result[1][1]}, ${result[2][2]}`);
+    if (result[0][0] === "seven") {
+      totalWin += PAYOUTS.jackpot;
+      winningLines.push({ type: "diag1" });
+      messages.push("🎰 JACKPOT! Diagonal ↘ with 7-7-7");
+    } else {
+      totalWin += PAYOUTS.diag;
+      winningLines.push({ type: "diag1" });
+      messages.push(
+        `Diagonal (↘) win with ${result[0][0]}, ${result[1][1]}, ${result[2][2]}`
+      );
+    }
   }
 
-  // Diagonal ↙
+  // 🔹 Check diagonal ↙
   if (result[0][2] === result[1][1] && result[1][1] === result[2][0]) {
-    totalWin += PAYOUTS.diag;
-    winningLines.push({ type: "diag2" });
-    messages.push(`Diagonal (↙) win with ${result[0][2]}, ${result[1][1]}, ${result[2][0]}`);
+    if (result[0][2] === "seven") {
+      totalWin += PAYOUTS.jackpot;
+      winningLines.push({ type: "diag2" });
+      messages.push("🎰 JACKPOT! Diagonal ↙ with 7-7-7");
+    } else {
+      totalWin += PAYOUTS.diag;
+      winningLines.push({ type: "diag2" });
+      messages.push(
+        `Diagonal (↙) win with ${result[0][2]}, ${result[1][1]}, ${result[2][0]}`
+      );
+    }
   }
 
-  // Jackpot
-  if (
-    result[1][0] === "seven" &&
-    result[1][1] === "seven" &&
-    result[1][2] === "seven"
-  ) {
-    totalWin += PAYOUTS.jackpot;
-    messages.push("🎰 JACKPOT! 7-7-7 on the middle row");
-  }
-
-  // Handle wins
+  // 🔹 Apply result
   if (totalWin > 0) {
     setCredits((c) => c + totalWin);
     gameRef.current?.highlightPaylines(winningLines);
@@ -97,8 +111,10 @@ const handleSpinEnd = () => {
     setWinMessages(["No win this time. Try again!"]);
   }
 
+  // Re-enable spin button
   setSpinning(false);
 };
+
 
 
 

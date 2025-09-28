@@ -24,6 +24,29 @@ const reelCentersX = Array.from({ length: REELS }, (_, i) =>
 
 const SYMBOLS = ["cherry", "lemon", "bar", "seven"];
 
+// Helper to pick random symbol name
+function randSymbol() {
+  return SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
+}
+
+// Assign texture + store symbol name in sprite
+function setSpriteSymbol(sprite, key) {
+  sprite.__symbol = key; // store clean name
+  const tex = PIXI.Texture.from(`/assets/${key}.png`);
+  sprite.texture = tex;
+
+  // Scale to fit cell
+  const TARGET = SYMBOL_SIZE * 0.8;
+  const applyScale = () => {
+    const orig = sprite.texture.orig;
+    const scale = Math.min(TARGET / orig.width, TARGET / orig.height);
+    sprite.scale.set(scale);
+  };
+
+  if (tex.baseTexture.valid) applyScale();
+  else tex.baseTexture.once("loaded", applyScale);
+}
+
 const GameCanvas = forwardRef(({ onSpinEnd }, ref) => {
   const rootRef = useRef(null);
   const appRef = useRef(null);
@@ -77,23 +100,16 @@ const GameCanvas = forwardRef(({ onSpinEnd }, ref) => {
 
       const sprites = [];
       for (let row = 0; row < ROWS; row++) {
-        const key = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
-        const sprite = PIXI.Sprite.from(`/assets/${key}.png`);
+        const sprite = new PIXI.Sprite(); // empty, we’ll set texture via helper
         sprite.anchor.set(0.5);
         sprite.x = 0;
         sprite.y = row * SYMBOL_SIZE + SYMBOL_SIZE / 2;
 
-        // ✅ Scale properly to fit inside 100px cell
-        sprite.texture.baseTexture.once("loaded", () => {
-          const target = SYMBOL_SIZE * 0.8;
-          const orig = sprite.texture.orig;
-          const scale = Math.min(target / orig.width, target / orig.height);
-          sprite.scale.set(scale);
-        });
-
+        setSpriteSymbol(sprite, randSymbol());   // <— sets texture + __symbol + scale
         reelContainer.addChild(sprite);
         sprites.push(sprite);
       }
+
 
       reels.push({ container: reelContainer, sprites });
     }
@@ -111,82 +127,58 @@ const GameCanvas = forwardRef(({ onSpinEnd }, ref) => {
     };
   }, []);
 
-  // Spin reels
+
+
+// Spin reels
   function spinReels() {
-// --- Start spin sound ---
-  if (spinInstanceRef.current) {
-    try { spinInstanceRef.current.stop(); } catch {}
-  }
-  spinInstanceRef.current = sound.play("spin", { loop: true, volume: 0.5 });
-
-
-
-  reelsRef.current.forEach((reel, i) => {
-    const symbols = reel.sprites;
-    const totalSpins = 20 + i * 5; // spin longer for each reel
-    let spins = 0;
-
-    const spinOne = () => {
-      // Move each symbol down
-      symbols.forEach((sprite) => {
-        sprite.y += SYMBOL_SIZE;
-        if (sprite.y >= ROWS * SYMBOL_SIZE) {
-          // Recycle symbol to top
-          sprite.y -= ROWS * SYMBOL_SIZE;
-          const key = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
-          sprite.texture = PIXI.Texture.from(`/assets/${key}.png`);
-
-          // rescale after texture change
-          sprite.texture.baseTexture.once("loaded", () => {
-            const target = SYMBOL_SIZE * 0.8;
-            const orig = sprite.texture.orig;
-            const scale = Math.min(target / orig.width, target / orig.height);
-            sprite.scale.set(scale);
-          });
-        }
-      });
-
-      spins++;
-      if (spins < totalSpins) {
-        setTimeout(spinOne, 100); // control speed
-      } else if (i === reelsRef.current.length - 1) {
-         if (spinInstanceRef.current) {
-            try {
-              spinInstanceRef.current.stop();   // ✅ this cuts it instantly
-            } catch (e) {
-              console.warn("Error stopping spin sound:", e);
-            }
-            spinInstanceRef.current = null;
-          }
-          onSpinEnd?.();
-        }
-    };
-
-    spinOne();
-  });
-}
-
-
-  // Get current 3×3 grid of results
-function getResult() {
-  const rows = [[], [], []];
-
-  reelsRef.current.forEach((reel) => {
-    reel.sprites.forEach((sprite, row) => {
-      // Take the texture ID (something like "/assets/seven.png")
-      const id = sprite.texture.textureCacheIds[0];
-
-      // Extract clean symbol name: "seven", "bar", "cherry", "lemon"
-      let symbol = id;
-      if (id.includes("/")) {
-        symbol = id.split("/").pop().replace(".png", "");
-      }
-      rows[row].push(symbol);
+    reelsRef.current.forEach((reel, i) => {
+      reel.spinning = true;
+      reel.position = 0;
+      reel.target = 20 + i * 5 + Math.floor(Math.random() * 10);
     });
-  });
 
-  return rows; // [["seven","cherry","seven"],["bar","seven","cherry"],["cherry","bar","seven"]]
-}
+    appRef.current.ticker.add(updateSpin);
+  }
+
+  function updateSpin() {
+    let spinning = false;
+    reelsRef.current.forEach((reel) => {
+      if (reel.spinning) {
+        spinning = true;
+        reel.position += 0.3;
+
+        if (reel.position >= reel.target) {
+          reel.spinning = false;
+          reel.position = reel.target;
+        }
+
+        reel.sprites.forEach((sprite, j) => {
+          sprite.y = ((j * SYMBOL_SIZE + reel.position * SYMBOL_SIZE) % (ROWS * SYMBOL_SIZE)) + SYMBOL_SIZE / 2;
+          if (sprite.y < 0) {
+            sprite.y += ROWS * SYMBOL_SIZE;
+            setSpriteSymbol(sprite, randSymbol());
+          }
+        });
+      }
+    });
+
+    if (!spinning) {
+      appRef.current.ticker.remove(updateSpin);
+      onSpinEnd && onSpinEnd();
+    }
+  }
+
+  // ✅ Correct result grid: sort by y to match visible order
+  function getResult() {
+    const rows = [[], [], []]; // top, middle, bottom
+    reelsRef.current.forEach((reel) => {
+      const ordered = [...reel.sprites].sort((a, b) => a.y - b.y);
+      rows[0].push(ordered[0].__symbol);
+      rows[1].push(ordered[1].__symbol);
+      rows[2].push(ordered[2].__symbol);
+    });
+    return rows;
+  }
 
 
   // Highlight winning paylines
